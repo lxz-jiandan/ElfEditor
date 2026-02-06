@@ -1,0 +1,6 @@
+# ninja log v5
+334	515	7920627810007125	ELFEditor.exe	254e442392b51a18
+15	105	7920630297414713	CMakeFiles/ElfEditor.dir/zLog.cpp.obj	5c0dc15349a68e68
+0	230	7920630298654326	CMakeFiles/ElfEditor.dir/zElf.cpp.obj	ce85d68f88e8934f
+8	351	7920630299864323	CMakeFiles/ElfEditor.dir/main.cpp.obj	1840f8ef0da07949
+351	709	7920630303264018	ElfEditor.exe	16635e03ca6aa63e

@@ -1,0 +1,2 @@
+#pragma code_page(65001)
+1 /* CREATEPROCESS_MANIFEST_RESOURCE_ID */ 24 /* RT_MANIFEST */ "D:/work/2026/0202_my_vmp/ElfEditor/cmake-build-debug/CMakeFiles/ElfEditor.dir/embed.manifest"
