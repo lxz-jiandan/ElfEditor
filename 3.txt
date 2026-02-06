@@ -1,0 +1,25 @@
+0x00000000-0x0000003f    0x00000040    elf_header
+0x00000040-0x000002df    0x000002a0    program_header_table
+    0x00000040-0x00000077    0x00000038    program_table_element[0x00] (R__) Program Header
+    0x00000078-0x000000af    0x00000038    program_table_element[0x01] (R__) Interpreter Path
+    0x000000b0-0x000000e7    0x00000038    program_table_element[0x02] (R_X) Loadable Segment
+    0x000000e8-0x0000011f    0x00000038    program_table_element[0x03] (RW_) Loadable Segment
+    0x00000120-0x00000157    0x00000038    program_table_element[0x04] (RW_) Loadable Segment
+    0x00000158-0x0000018f    0x00000038    program_table_element[0x05] (R_X) Loadable Segment
+    0x00000190-0x000001c7    0x00000038    program_table_element[0x06] (R_X) Loadable Segment
+    0x000001c8-0x000001ff    0x00000038    program_table_element[0x07] (RW_) Loadable Segment
+    0x00000200-0x00000237    0x00000038    program_table_element[0x08] (RW_) Loadable Segment
+    0x00000238-0x0000026f    0x00000038    program_table_element[0x09] (RW_) Dynamic Segment
+    0x00000270-0x000002a7    0x00000038    program_table_element[0x0a] (R__) GCC .eh_frame_hdr Segment
+    0x000002a8-0x000002df    0x00000038    program_table_element[0x0b] (RW_) GNU Stack (executability)
+0x000002e0-0x000b3493    0x000b31b4    [padding]
+0x000b3494-0x000b3647    0x000001b4    section[0x01] .dynstr
+0x000b3648-0x000b3e37    0x000007f0    [padding]
+0x000b3e38-0x000b3fd7    0x000001a0    section[0x02] .dynamic
+0x000b3fd8-0x000b3ff3    0x0000001c    section[0x03] .shstrtab
+0x000b3ff4-0x000b3ff7    0x00000004    [padding]
+0x000b3ff8-0x000b40f7    0x00000100    section_header_table
+    0x000b3ff8-0x000b4037    0x00000040    section_table_element[0x00] SHN_UNDEF
+    0x000b4038-0x000b4077    0x00000040    section_table_element[0x01] .dynstr
+    0x000b4078-0x000b40b7    0x00000040    section_table_element[0x02] .dynamic
+    0x000b40b8-0x000b40f7    0x00000040    section_table_element[0x03] .shstrtab

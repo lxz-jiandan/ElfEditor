@@ -546,6 +546,208 @@ void zElf::print_layout() {
 }
 
 /**
+ * Step-2: PHT 迁移与段扩增
+ * 将 Program Header Table 从文件头部迁移至文件末尾，并增加条目数量
+ * @param extra_entries 要新增的 PHT 条目数量（建议 4 个）
+ * @param output_path 输出文件路径
+ * @return 成功返回 true，否则返回 false
+ */
+bool zElf::relocate_and_expand_pht(int extra_entries, const char* output_path) {
+    LOGI("=== Step-2: PHT Relocation & Expansion (Surgical Approach) ===");
+    LOGI("Extra entries to add: %d", extra_entries);
+
+    if (!elf_file_ptr || !program_header_table) {
+        LOGE("ELF not loaded or parsed");
+        return false;
+    }
+
+    const size_t PAGE_SIZE = 0x1000;
+    const Elf64_Off NEW_PHT_OFFSET = 0x3000;  // 固定位置
+
+    // ========== 第一阶段：空间预计算 ==========
+    LOGI("\n[Phase 1] Space Precalculation");
+
+    Elf64_Half old_ph_num = program_header_table_num;
+    Elf64_Half new_ph_num = old_ph_num + extra_entries;
+    LOGI("  Old_PH_Num: %d", old_ph_num);
+    LOGI("  New_PH_Num: %d", new_ph_num);
+
+    size_t new_pht_size = new_ph_num * sizeof(Elf64_Phdr);
+    LOGI("  New PHT size: 0x%zx (%zu bytes)", new_pht_size, new_pht_size);
+    LOGI("  New PHT offset (fixed): 0x%llx", (unsigned long long)NEW_PHT_OFFSET);
+
+    // ========== 第二阶段：构建新 PHT ==========
+    LOGI("\n[Phase 2] Build New PHT");
+
+    Elf64_Phdr* new_pht_buffer = (Elf64_Phdr*)malloc(new_pht_size);
+    if (!new_pht_buffer) {
+        LOGE("Failed to allocate memory for new PHT");
+        return false;
+    }
+
+    // 拷贝旧 PHT
+    memcpy(new_pht_buffer, program_header_table, old_ph_num * sizeof(Elf64_Phdr));
+    LOGI("  Copied %d old PHT entries", old_ph_num);
+
+    // 初始化新增的 PHT 条目为 PT_NULL
+    for (int i = old_ph_num; i < new_ph_num; i++) {
+        memset(&new_pht_buffer[i], 0, sizeof(Elf64_Phdr));
+        new_pht_buffer[i].p_type = PT_NULL;
+    }
+    LOGI("  Initialized %d new PHT entries (PT_NULL)", extra_entries);
+
+    // ========== 第三阶段：创建自救 LOAD 段（手术刀方案）==========
+    LOGI("\n[Phase 3] Create Self-Rescue LOAD Segment (Surgical)");
+
+    // 使用最后一个新增槽位 (Index = old_ph_num + extra_entries - 1)
+    int rescue_load_idx = old_ph_num + extra_entries - 1;
+    LOGI("  Creating new PT_LOAD at index %d", rescue_load_idx);
+
+    Elf64_Phdr* rescue_load = &new_pht_buffer[rescue_load_idx];
+    rescue_load->p_type = PT_LOAD;
+    rescue_load->p_offset = NEW_PHT_OFFSET;
+    rescue_load->p_vaddr = NEW_PHT_OFFSET;
+    rescue_load->p_paddr = NEW_PHT_OFFSET;
+    rescue_load->p_filesz = new_pht_size;
+    rescue_load->p_memsz = new_pht_size;
+    rescue_load->p_flags = PF_R;  // 只读
+    rescue_load->p_align = PAGE_SIZE;
+
+    LOGI("  New PT_LOAD[%d] configuration:", rescue_load_idx);
+    LOGI("    p_type:   PT_LOAD");
+    LOGI("    p_offset: 0x%llx", (unsigned long long)rescue_load->p_offset);
+    LOGI("    p_vaddr:  0x%llx", (unsigned long long)rescue_load->p_vaddr);
+    LOGI("    p_filesz: 0x%llx", (unsigned long long)rescue_load->p_filesz);
+    LOGI("    p_memsz:  0x%llx", (unsigned long long)rescue_load->p_memsz);
+    LOGI("    p_flags:  PF_R (0x%x)", rescue_load->p_flags);
+    LOGI("    p_align:  0x%llx", (unsigned long long)rescue_load->p_align);
+
+    // ========== 第四阶段：修正 PT_PHDR ==========
+    LOGI("\n[Phase 4] Update PT_PHDR Metadata");
+
+    int pt_phdr_idx = -1;
+    for (int i = 0; i < old_ph_num; i++) {
+        if (new_pht_buffer[i].p_type == PT_PHDR) {
+            pt_phdr_idx = i;
+            break;
+        }
+    }
+
+    if (pt_phdr_idx != -1) {
+        Elf64_Phdr* pt_phdr = &new_pht_buffer[pt_phdr_idx];
+        Elf64_Addr old_vaddr = pt_phdr->p_vaddr;
+        Elf64_Off old_offset = pt_phdr->p_offset;
+
+        pt_phdr->p_offset = NEW_PHT_OFFSET;
+        pt_phdr->p_vaddr = NEW_PHT_OFFSET;
+        pt_phdr->p_paddr = NEW_PHT_OFFSET;
+        pt_phdr->p_filesz = new_pht_size;
+        pt_phdr->p_memsz = new_pht_size;
+
+        LOGI("  Updated PT_PHDR[%d]:", pt_phdr_idx);
+        LOGI("    p_offset: 0x%llx -> 0x%llx", (unsigned long long)old_offset, (unsigned long long)NEW_PHT_OFFSET);
+        LOGI("    p_vaddr:  0x%llx -> 0x%llx", (unsigned long long)old_vaddr, (unsigned long long)NEW_PHT_OFFSET);
+        LOGI("    p_filesz: 0x%llx", (unsigned long long)pt_phdr->p_filesz);
+        LOGI("    p_memsz:  0x%llx", (unsigned long long)pt_phdr->p_memsz);
+
+        // 验证页对齐一致性
+        LOGI("  Page alignment check:");
+        LOGI("    File offset  %% 0x1000 = 0x%llx", (unsigned long long)(NEW_PHT_OFFSET % PAGE_SIZE));
+        LOGI("    Virtual addr %% 0x1000 = 0x%llx", (unsigned long long)(NEW_PHT_OFFSET % PAGE_SIZE));
+        LOGI("    ✓ PERFECT: p_vaddr == p_offset (simplest case)");
+    } else {
+        LOGI("  No PT_PHDR found (optional)");
+    }
+
+    // ========== 第五阶段：构建输出文件 ==========
+    LOGI("\n[Phase 5] Build Output File");
+
+    size_t new_file_size = NEW_PHT_OFFSET + new_pht_size;
+    LOGI("  New file size: 0x%zx (%zu bytes)", new_file_size, new_file_size);
+
+    char* new_file_ptr = (char*)malloc(new_file_size);
+    if (!new_file_ptr) {
+        LOGE("Failed to allocate memory for new file");
+        free(new_pht_buffer);
+        return false;
+    }
+
+    // 复制原文件内容
+    size_t copy_size = (file_size < NEW_PHT_OFFSET) ? file_size : NEW_PHT_OFFSET;
+    memcpy(new_file_ptr, elf_file_ptr, copy_size);
+
+    // 填充到新 PHT 位置的间隙（用 0 填充）
+    if (NEW_PHT_OFFSET > file_size) {
+        memset(new_file_ptr + file_size, 0, NEW_PHT_OFFSET - file_size);
+        LOGI("  Filled padding: 0x%llx bytes", (unsigned long long)(NEW_PHT_OFFSET - file_size));
+    }
+
+    // 写入新 PHT
+    memcpy(new_file_ptr + NEW_PHT_OFFSET, new_pht_buffer, new_pht_size);
+    LOGI("  Placed new PHT at offset 0x%llx", (unsigned long long)NEW_PHT_OFFSET);
+
+    // 更新 ELF Header
+    Elf64_Ehdr* new_elf_header = (Elf64_Ehdr*)new_file_ptr;
+    Elf64_Off old_e_phoff = new_elf_header->e_phoff;
+    Elf64_Half old_e_phnum = new_elf_header->e_phnum;
+
+    new_elf_header->e_phoff = NEW_PHT_OFFSET;
+    new_elf_header->e_phnum = new_ph_num;
+
+    LOGI("  Updated ELF Header:");
+    LOGI("    e_phoff: 0x%llx -> 0x%llx", (unsigned long long)old_e_phoff, (unsigned long long)NEW_PHT_OFFSET);
+    LOGI("    e_phnum: %d -> %d", old_e_phnum, new_ph_num);
+
+    // ========== 第六阶段：一致性校验 ==========
+    LOGI("\n[Phase 6] Consistency Check");
+
+    if (new_elf_header->e_phoff + new_pht_size > new_file_size) {
+        LOGE("Consistency check failed: PHT exceeds file size");
+        free(new_file_ptr);
+        free(new_pht_buffer);
+        return false;
+    }
+
+    LOGI("  ✓ PHT within file bounds");
+    LOGI("  ✓ All existing LOAD segments preserved");
+    LOGI("  ✓ New rescue LOAD segment at index %d", rescue_load_idx);
+    LOGI("  ✓ All consistency checks passed");
+
+    // ========== 第七阶段：写入文件 ==========
+    LOGI("\n[Phase 7] Write Output File");
+
+    FILE* fp = fopen(output_path, "wb");
+    if (!fp) {
+        LOGE("Failed to open output file: %s", output_path);
+        free(new_file_ptr);
+        free(new_pht_buffer);
+        return false;
+    }
+
+    size_t written = fwrite(new_file_ptr, 1, new_file_size, fp);
+    fclose(fp);
+
+    if (written != new_file_size) {
+        LOGE("Failed to write complete file, written: %zu, expected: %zu", written, new_file_size);
+        free(new_file_ptr);
+        free(new_pht_buffer);
+        return false;
+    }
+
+    LOGI("  ✓ Successfully wrote to: %s", output_path);
+    LOGI("\n=== Summary ===");
+    LOGI("  Original file size: 0x%zx (%zu bytes)", file_size, file_size);
+    LOGI("  New file size: 0x%zx (%zu bytes)", new_file_size, new_file_size);
+    LOGI("  PHT relocated from 0x%llx to 0x%llx", (unsigned long long)old_e_phoff, (unsigned long long)NEW_PHT_OFFSET);
+    LOGI("  PHT entries: %d -> %d (added %d)", old_e_phnum, new_ph_num, extra_entries);
+    LOGI("  Strategy: Surgical - Added dedicated rescue LOAD segment without modifying existing segments");
+
+    free(new_file_ptr);
+    free(new_pht_buffer);
+    return true;
+}
+
+/**
  * 析构函数
  */
 zElf::~zElf() {

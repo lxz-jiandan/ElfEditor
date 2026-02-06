@@ -3,7 +3,10 @@
     "allow": [
       "Bash(cmake:*)",
       "Bash(ninja:*)",
-      "Bash(./build/ElfEditor.exe:*)"
+      "Bash(./build/ElfEditor.exe:*)",
+      "Bash(buildElfEditor.exe)",
+      "Bash(\"build/ElfEditor.exe\")",
+      "Bash(readelf:*)"
     ]
   }
 }

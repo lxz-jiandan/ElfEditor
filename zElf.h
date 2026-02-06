@@ -69,6 +69,9 @@ public:
 
     // 打印文件布局
     void print_layout();
+
+    // Step-2: PHT 迁移与段扩增
+    bool relocate_and_expand_pht(int extra_entries, const char* output_path);
 };
 
 #endif //OVERT_ZELF_H
