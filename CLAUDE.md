@@ -224,5 +224,11 @@ ninja -C build
 cd build; ninja
 
 # 输出可执行文件位于：build/ElFEditor.exe
+
+
+
+D:\Clion2022\bin\cmake\win\bin\cmake.exe -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MAKE_PROGRAM=D:/Clion2022/bin/ninja/win/ninja.exe -G Ninja -S D:\work\2026\0202_my_vmp\VmProtect -B D:\work\2026\0202_my_vmp\VmProtect\cmake-build-debug
+
+D:\Clion2022\bin\ninja\win\ninja.exe -C D:\work\2026\0202_my_vmp\VmProtect\build
 ```
 
